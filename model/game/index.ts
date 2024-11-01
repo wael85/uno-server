@@ -1,5 +1,4 @@
 import type { Card } from '../../interfaces/Deck'
-import type { Hand } from '../../interfaces/Hans'
 import type { GameInterface } from '../../interfaces/Uno'
 import type { Randomizer, Shuffler } from '../../utils/random_utils'
 import { standardRandomizer, standardShuffler } from '../../utils/random_utils'

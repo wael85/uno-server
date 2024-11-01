@@ -1,4 +1,4 @@
-import type { Card, Color, Deck } from '../../interfaces/Deck'
+import type { Card, Color } from '../../interfaces/Deck'
 import type { EventFunction, HandInterface } from '../../interfaces/Hand'
 import type { Shuffler } from '../../utils/random_utils'
 import { Deck } from '../deck/index'
@@ -37,7 +37,7 @@ export class Hand implements HandInterface {
     this.deck = new Deck()
     this.deck.shuffle(shuffler)
     for (const player of players) {
-      const playerHand = []
+      const playerHand: Card[] = []
       for (let i = 0; i < cardsPerPlayer; i++) {
         const cardToGive = this.deck.deal()
         //because we are limiting players to 10, we know that it will never be undefined
