@@ -2,7 +2,7 @@ import type { Card } from '../../interfaces/Deck'
 import type { GameInterface } from '../../interfaces/Uno'
 import type { Randomizer, Shuffler } from '../../utils/random_utils'
 import { standardRandomizer, standardShuffler } from '../../utils/random_utils'
-import { Hand } from '../hand/index.ts'
+import { Hand } from '../hand/index'
 
 export default class Game implements GameInterface {
   players: string[]

@@ -37,7 +37,7 @@ export class Hand implements HandInterface {
     this.deck = new Deck()
     this.deck.shuffle(shuffler)
     for (const player of players) {
-      const playerHand: Card[] = []
+      const playerHand = []
       for (let i = 0; i < cardsPerPlayer; i++) {
         const cardToGive = this.deck.deal()
         //because we are limiting players to 10, we know that it will never be undefined
