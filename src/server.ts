@@ -3,8 +3,8 @@ import { WebSocketServer, WebSocket } from 'ws'
 import Game  from './model/game/index'
 
 const webSocketServer = new WebSocketServer({ port: 9090, path: '/publish' })
-type gameStat = {gameId: number, game: Game}
-type Lobby = { lobbyId: number,maxPlayers:number, score:number ,players: string[]}
+// type gameStat = {gameId: number, game: Game}
+// type Lobby = { lobbyId: number,maxPlayers:number, score:number ,players: string[]}
 type KeyData = {key: string}
 type Message = {topic: string, message: any}
 interface ClientMap extends Record<string, (data: any, ws: WebSocket) => void> {
@@ -13,19 +13,7 @@ interface ClientMap extends Record<string, (data: any, ws: WebSocket) => void> {
     send(message: Message, ws: WebSocket): void
     close(message: any, ws: WebSocket): void
 }
-// const TopicManager = (topic : string , msg:{}) : string =>{
-//     switch(topic){
-//         case 'CreateLooby':
-//             const {score,maxPlayers,userName} = msg
-//             const lobby = CreateLooby(score,maxPlayers,userName)
-            
-//         case 'JoinLooby':
-//             const {lobbyId,userName} = msg
-//             return "OK"
 
-//     }
-//     return "Invalid topic"
-// }
 // const games = new Map<number, Game>();
 // const CreateLooby = (score: number , maxPlayers: number , userName: string): Lobby => {
 //    const  lobbyId =Math.round( Math.random() * 1000)
@@ -75,22 +63,37 @@ const clientMap = (): ClientMap => {
 }
 
 const clients = clientMap()
-
 type Command = { type: string } & Record<string, unknown>
 
+
+/**
+ * After the server is created, we listen for new connections.
+ * To join Looby send  {  "type": "subscribe",  "key": "15", "userName": "user1" }
+ */
 webSocketServer.on('connection', (ws, req) => {
+    console.log('New connection from', req.socket.remoteAddress, '(', req.socket.remoteFamily, ')')
     ws.on('message', message => {
         try {
-            const { type, ...params } = JSON.parse(message.toString()) as Command
-            if (clients[type] !== undefined)
-                clients[type](params, ws)
-            else //if (TopicManager(type, params) === "Invalid topic")
-                console.error(`Incorrect message: '${message}' from ${req.socket.remoteAddress} (${req.socket.remoteFamily})`)
+            const { type, ...params } = JSON.parse(message.toString()) as Command;
+            if (clients[type] !== undefined) {
+                clients[type](params, ws);
+            // } else if (type === 'createLooby') {
+            //     const { score, maxPlayers, userName } = params as { score: number, maxPlayers: number, userName: string };
+            //     const newLobby = CreateLooby(score, maxPlayers, userName);
+            //     clients.subscribe({ key: newLobby.lobbyId.toString() }, ws);
+            //     console.log('createLooby', newLobby);
+            // else if (type === 'joinLooby') 
+            //     const { lobbyId, joinUserName } = params as { lobbyId: number, userName: string };
+            //     const lobby = JoinLooby(lobbyId, joinUserName);
+            //     clients.send({ topic: lobbyId.toString(), message: lobby }, ws);
+            }else 
+                console.error(`Incorrect message: '${message}' from ${req.socket.remoteAddress} (${req.socket.remoteFamily})`);
+            
         } catch (e) {
-            console.error(e)
+            console.error(e);
         }
-    })
-    ws.on('close', () => clients.close({}, ws))
-})
+    });
+    ws.on('close', () => clients.close({}, ws));
+});
 
 console.log('Pub/Sub server listening on 9090')
