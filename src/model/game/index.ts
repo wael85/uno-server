@@ -85,3 +85,26 @@ export default class Game implements GameInterface {
     }
   }
 }
+export  class GameLooby{
+
+  players: player[]
+  numberOfPlayers: number =4
+  gameid: string | undefined
+
+
+  constructor(creator: player, numberOfPlayers: number, score: number = 500 ,gameId: string | undefined) {
+    this.players = [creator]
+    this.numberOfPlayers = numberOfPlayers
+    this.gameid = gameId
+  }
+  addPlayer(player: player) {
+    this.players.push(player)
+  }
+  startGame() : Game{
+    const game = new Game(this.players.map(player => player.userName), 500)
+    return game
+  }
+
+
+}
+export type player = {userName: string, ws: WebSocket}
