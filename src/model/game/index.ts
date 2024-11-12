@@ -2,9 +2,12 @@ import type { Card } from '../../interfaces/Deck'
 import type { GameInterface } from '../../interfaces/Uno'
 import type { Randomizer, Shuffler } from '../../utils/random_utils'
 import { standardRandomizer, standardShuffler } from '../../utils/random_utils'
+import { GameStatus } from '../GameDAO'
 import { Hand } from '../hand/index'
+import { WebSocket } from 'ws'
 
-export default class Game implements GameInterface {
+export default class ServerGame implements GameInterface {
+  gameId: string | undefined
   players: string[]
   targetScore: number
   playerCount: number
@@ -15,36 +18,66 @@ export default class Game implements GameInterface {
   shuffler: Shuffler<Card>
   cardsPerPlayer: number
   dealer: number
+  playersSocket: WebSocket[] = []
+  status: GameStatus = 'Waiting'
 
   constructor(
-    players: string[] = ['A', 'B'],
+    creator: string,
+    creatorSocket: WebSocket,
     targetScore: number = 500,
+    numberOfPlayers: number = 4,
     randomizer: Randomizer = standardRandomizer,
     shuffler: Shuffler<Card> = standardShuffler,
     cardsPerPlayer: number = 7
   ) {
-    if (players.length < 2) {
-      throw new Error('You must be at least 2 players to play!')
-    }
-    if (players.length > 10) {
-      throw new Error('You must be less than 10 players to play!')
-    }
+    this.players = [creator]
+    this.playersSocket = [creatorSocket]
     if (targetScore <= 0) {
       throw new Error('Target score must be bigger than 0!')
     }
-    this.players = players
     this.randomizer = randomizer
     this.shuffler = shuffler
     this.cardsPerPlayer = cardsPerPlayer
     this.targetScore = targetScore
-    this.playerCount = players.length
-    for (let i = 0; i < players.length; i++) {
-      this.playerScores.push(0)
-    }
-    this.dealer = players.length - 1
-    this.handAtPlay = new Hand(players, this.dealer, shuffler, cardsPerPlayer)
+    this.playerCount = numberOfPlayers
+    this.playerScores = [0]
+    this.dealer = numberOfPlayers - 1
+   
   }
-
+  join(player: string, playerSocket: WebSocket) {
+    if (this.players.length >= this.playerCount) {
+      throw new Error('Game is full')
+    }
+    this.players.push(player)
+    this.playersSocket.push(playerSocket)
+    this.playerScores.push(0)
+  }
+  start() {
+    if(this.status === 'Playing'){
+      throw new Error('Game is already playing')
+    }
+    if(this.status === 'Finished'){
+      throw new Error('Game is already finished')
+    }
+    if(this.handAtPlay === undefined){
+     this.handAtPlay = new Hand(this.players, this.dealer, this.shuffler, this.cardsPerPlayer) 
+     this.status = 'Playing'
+    }
+  }
+  getGameJson(){
+    return {
+      gameId: this.gameId,
+      players: this.players,
+      targetScore: this.targetScore,
+      playerCount: this.playerCount,
+      playerScores: this.playerScores,
+      handAtPlay: this.handAtPlay,
+      theWinner: this.theWinner,
+      cardsPerPlayer: this.cardsPerPlayer,
+      dealer: this.dealer,
+      status: this.status
+    }
+  }
   player(player: number) {
     if (player < 0 || player >= this.players.length) {
       throw new Error('Invalid index')
@@ -85,29 +118,3 @@ export default class Game implements GameInterface {
     }
   }
 }
-export  class GameLooby{
-
-  players: player[]
-  numberOfPlayers: number =4
-  gameid: string | undefined
-  score: number = 500
-  creator: player
-
-
-  constructor(creator: player, numberOfPlayers: number, score: number| undefined, gameId: string | undefined) {
-    this.creator = creator
-    this.players = [creator]
-    this.numberOfPlayers = numberOfPlayers
-    this.gameid = gameId
-  }
-  addPlayer(player: player) {
-    this.players.push(player)
-  }
-  startGame() : Game{
-    const game = new Game(this.players.map(player => player.userName), 500)
-    return game
-  }
-
-
-}
-export type player = {userName: string, ws: WebSocket}

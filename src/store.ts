@@ -1,49 +1,84 @@
-import Game, { GameLooby} from './model/game/index'
+import ServerGame from './model/game/index'
+import * as gameDB from './model/GameDAO';
+import { WebSocket } from 'ws';
 
 
 export class GameStore {
-    runningGames = new Map<string, Game>(); 
-    loobies = new Map<string, GameLooby>();
+    runningGames = new Map<string, ServerGame>(); 
 
-    // Add a game to the running games
-    StartGame(gameId: string): void {
-        const looby = this.getLobby(gameId)
-        const game = looby?.startGame()
-        if(game) this.runningGames.set(gameId, game);
+    createGame = async (creator: string, creatorSocket:WebSocket, score: number, numberOfPlayers: number): Promise<{game:ServerGame | undefined,gameId:string}> =>{
+        try{
+            const newGame = await gameDB.createGame('Waiting',[],score,numberOfPlayers,[],undefined,undefined,7,0);
+            const serverGame = new ServerGame(creator, creatorSocket, score, numberOfPlayers);
+            if(newGame){
+                this.runningGames.set(newGame.gameId, serverGame);
+                return {game:serverGame,gameId:newGame.gameId};
+            }
+            return {game:serverGame,gameId:''};
+        }catch(e){
+            console.error(e);
+            return {game:undefined,gameId:''};
+        }
     }
-
-    // Remove a game from the running games
-    removeGame(gameId: string): boolean {
-        return this.runningGames.delete(gameId);
-    }
-
-    // Get a game from the running games
-    getGame(gameId: string): Game | undefined {
+    getGame = (gameId: string): ServerGame | undefined =>{
         return this.runningGames.get(gameId);
     }
-
-    // Add a lobby to the lobbies
-    addLobby(lobbyId: string, lobby: GameLooby): void {
-        this.loobies.set(lobbyId, lobby);
+    deleteGame = (gameId: string): boolean =>{
+        return this.runningGames.delete(gameId);
     }
-
-    // Remove a lobby from the lobbies
-    removeLobby(lobbyId: string): boolean {
-        return this.loobies.delete(lobbyId);
+    getGameIds = (): string[] =>{
+        return Array.from(this.runningGames.keys());
     }
-
-    // Get a lobby from the lobbies
-    getLobby(lobbyId: string): GameLooby | undefined {
-        return this.loobies.get(lobbyId);
+    getGames = (): ServerGame[] =>{
+        return Array.from(this.runningGames.values());
     }
-
-    // List all running games
-    listRunningGames(): Map<string, Game> {
-        return this.runningGames;
+    getGameCount = (): number =>{
+        return this.runningGames.size;
     }
-
-    // List all lobbies
-    listLobbies(): Map<string, GameLooby> {
-        return this.loobies;
+    getGameByPlayer = (player: string): ServerGame | undefined =>{
+        for(let game of this.runningGames.values()){
+            if(game.players.includes(player)){
+                return game;
+            }
+        }
+        return undefined;
+    }
+    getGameByPlayerSocket = (playerSocket: WebSocket): ServerGame | undefined =>{
+        for(let game of this.runningGames.values()){
+            if(game.playersSocket.includes(playerSocket)){
+                return game;
+            }
+        }
+        return undefined;
+    }
+    getGamesByStatus = (status: string): ServerGame[] =>{
+        return this.getGames().filter(game => game.status === status);
+    }
+    joinGame = (gameId: string, player: string, playerSocket: WebSocket): boolean =>{
+        try{
+            const game = this.getGame(gameId);
+            if(game){
+                game.join(player, playerSocket);
+                return true;
+            }
+            return false;
+        }catch(e){
+            console.error(e);
+            return false;
+        }   
+    }
+    saveGame = async (gameId: string): Promise<boolean> =>{
+        try{
+            const game = this.getGame(gameId);
+            const gameData = game?.getGameJson();
+            if(game){
+                await gameDB.updateGame(gameId,{...gameData});
+                return true;
+            }
+            return false;
+        }catch(e){
+            console.error(e);
+            return false;
+        }
     }
 }

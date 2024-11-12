@@ -3,7 +3,6 @@ import { Hand } from './hand/index';
 
 // Define the Game schema
 interface IGame extends Document {
-  status: GameStatus;
   players: string[];
   targetScore: number;
   playerCount: number;
@@ -12,6 +11,7 @@ interface IGame extends Document {
   theWinner: number | undefined;
   cardsPerPlayer: number;
   dealer: number;
+  status: GameStatus;
 }
 export type GameStatus = 'Waiting'| 'Playing'| 'Finished';
 // Status: "Waiting", "Playing", "Finished"
@@ -25,7 +25,7 @@ const GameSchema: Schema = new Schema({
   theWinner: { type: Number, required: false },
   cardsPerPlayer: { type: Number, required: false },
   dealer: { type: Number, required: false },
-}, { collection: 'Game' });
+}, { collection: 'uno-game.Game' });
 
 const Game: Model<IGame> = mongoose.model<IGame>('Game', GameSchema);
 

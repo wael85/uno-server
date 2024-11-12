@@ -1,9 +1,12 @@
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws'
 import * as DB from './DbAccess'
-import Game, { GameLooby }  from './model/game/index'
+import Game  from './model/game/index'
 import * as userDB from './model/UserDAO'
 import * as gameDB from './model/GameDAO'
+import { GameStore } from './store';
+import e from 'express';
+import { join } from 'path';
 
 
 const webSocketServer = new WebSocketServer({ port: 9090, path: '/publish' },async ()=>{
@@ -22,11 +25,14 @@ type KeyData = {key: string}
 type LoginData = {username: string, password: string}
 type MakeMove = {key: string, message: any}
 type Message = {topic: string, message: any}
-type CreateGame = { looby: GameLooby}
+type CreateGame = { creator: string,score: number, numberOfPlayers: number }
+type JoinGame = { gameId: string, player: string }
 interface ClientMap extends Record<string, (data: any, ws: WebSocket) => void> {
     login( data: LoginData, ws: WebSocket): void
     signup(data: LoginData, ws: WebSocket): void
     createGame(data: CreateGame, ws: WebSocket): void
+    joinGame(data: JoinGame, ws: WebSocket): void
+    startGame(data: KeyData, ws: WebSocket): void
     subscribe(data: KeyData, ws: WebSocket): void
     unsubscribe(data: KeyData, ws: WebSocket): void
     send(message: Message, ws: WebSocket): void
@@ -46,16 +52,38 @@ const clientMap = (): ClientMap => {
     };
     const createGame = async (game: CreateGame, ws: WebSocket) => {
       try{
-          var newGame = await gameDB.createGame('Waiting',game.looby.players.map(x=>x.userName),500,0,[],undefined,undefined,7,0)
-          //subscribers(newGame{_id}).add(ws);
-          ws.send(JSON.stringify({ topic: 'game key', message: newGame}))
+         
+          const result = await store.createGame(game.creator, ws, game.score, game.numberOfPlayers);
+          if(result.game){
+              let game = result.game.getGameJson();
+              game = {...game, gameId: result.gameId}
+              ws.send(JSON.stringify({ topic: 'game key', message: {game} }))
+           }else{
+                ws.send(JSON.stringify({ topic: 'createGame', message: 'Fail' }));
+            }
 
       }catch(e){    
         console.error(e);
         ws.send(JSON.stringify({ topic: 'createGame', message: 'Fail' }));
       }
-        
-   
+    }
+    const joinGame = (data: JoinGame, ws: WebSocket) =>{
+        try{
+            const game = store.getGame(data.gameId);
+            if(game){
+                game.join(data.player, ws);
+                const players = game.players;
+                const sockets = game.playersSocket;
+                sockets.forEach(pws => {
+                    pws.send(JSON.stringify({ topic: 'joinGame', message: {players} }));
+                });
+            }else{
+                ws.send(JSON.stringify({ topic: 'joinGame', message: 'Fail' }));
+            }
+        }catch(e){
+            console.error(e);
+            ws.send(JSON.stringify({ topic: 'joinGame', message: 'Fail' }));
+        }
     }
     const subscribe = async ({ key }: KeyData, ws: WebSocket) => {
         if(key ==="New Game"){
@@ -106,12 +134,18 @@ const clientMap = (): ClientMap => {
         }
    
     };
-    const startGame = (makeMove: MakeMove, ws: WebSocket) => {
-        subscribers(makeMove.key).forEach(connectedPlayer => {
-            if (connectedPlayer.readyState === WebSocket.OPEN) {
-                connectedPlayer.send(JSON.stringify({ topic: 'makeMove', message: makeMove.message }));
-            }
-        });
+    const startGame = (key: KeyData, ws: WebSocket) => {
+        const game = store.getGame(key.key);
+        if(game){
+            game.start();
+            const result = game.getGameJson();
+            const sockets = game.playersSocket;
+            sockets.forEach(pws => {
+                pws.send(JSON.stringify({ topic: 'startGame', message: {result} }));
+            });
+        }else{
+            ws.send(JSON.stringify({ topic: 'startGame', message: 'Fail' }));
+        }
     };
     const makeMove = (makeMove: MakeMove, ws: WebSocket) => {
         subscribers(makeMove.key).forEach(connectedPlayer => {
@@ -136,9 +170,9 @@ const clientMap = (): ClientMap => {
             clients[k].delete(ws);
     };
 
-    return { subscribe, unsubscribe, send, login, signup, makeMove, cachUno, sayUno, close ,createGame};
+    return { subscribe, unsubscribe, send, login, signup, makeMove, cachUno, sayUno, close ,createGame ,joinGame, startGame};
 };
-
+const store = new GameStore();
 const clients = clientMap();
 
 type Command = { type: string } & Record<string, unknown>
