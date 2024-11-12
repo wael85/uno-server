@@ -1,17 +1,32 @@
 import express from 'express';
 import { WebSocketServer, WebSocket } from 'ws'
-import Game  from './model/game/index'
+import * as DB from './DbAccess'
+import Game, { GameLooby }  from './model/game/index'
+import * as userDB from './model/UserDAO'
+import * as gameDB from './model/GameDAO'
 
 
-const webSocketServer = new WebSocketServer({ port: 9090, path: '/publish' })
+const webSocketServer = new WebSocketServer({ port: 9090, path: '/publish' },async ()=>{
+    console.log('Pub/Sub server listening on 9090')
+    try{
+        await DB.connectToDatabase();
+        console.log('Server Connected to Database')
+    }catch(e){
+        console.error('Failed to connect to Database')
+        console.error(e)
+    }
+})
 // type gameStat = {gameId: number, game: Game}
 // type Lobby = { lobbyId: number,maxPlayers:number, score:number ,players: string[]}
 type KeyData = {key: string}
 type LoginData = {username: string, password: string}
 type MakeMove = {key: string, message: any}
 type Message = {topic: string, message: any}
+type CreateGame = { looby: GameLooby}
 interface ClientMap extends Record<string, (data: any, ws: WebSocket) => void> {
     login( data: LoginData, ws: WebSocket): void
+    signup(data: LoginData, ws: WebSocket): void
+    createGame(data: CreateGame, ws: WebSocket): void
     subscribe(data: KeyData, ws: WebSocket): void
     unsubscribe(data: KeyData, ws: WebSocket): void
     send(message: Message, ws: WebSocket): void
@@ -21,23 +36,7 @@ interface ClientMap extends Record<string, (data: any, ws: WebSocket) => void> {
     close(message: any, ws: WebSocket): void
 }
 
-// const games = new Map<number, Game>();
-// const CreateLooby = (score: number , maxPlayers: number , userName: string): Lobby => {
-//    const  lobbyId =Math.round( Math.random() * 1000)
-//     const players = [userName]
-//     return {lobbyId,maxPlayers,score, players}
 
-// }
-// const JoinLooby = (lobby: Lobby , userName: string): Lobby => {
-//     if(lobby.players.length < lobby.maxPlayers){
-//         lobby.players.push(userName)
-//     }
-//     return lobby
-// }
-// const StartGame = (lobby: Lobby): gameStat => {
-//     const game = new Game(lobby.players, lobby.score);
-//     return {gameId: lobby.lobbyId, game}
-// }
 const clientMap = (): ClientMap => {
     const clients: Record<string, Set<WebSocket>> = {};
 
@@ -45,14 +44,27 @@ const clientMap = (): ClientMap => {
         clients[key] ??= new Set();
         return clients[key];
     };
+    const createGame = async (game: CreateGame, ws: WebSocket) => {
+      try{
+          var newGame = await gameDB.createGame('Waiting',game.looby.players.map(x=>x.userName),500,0,[],undefined,undefined,7,0)
+          //subscribers(newGame{_id}).add(ws);
+          ws.send(JSON.stringify({ topic: 'game key', message: newGame}))
 
-    const subscribe = ({ key }: KeyData, ws: WebSocket) => {
+      }catch(e){    
+        console.error(e);
+        ws.send(JSON.stringify({ topic: 'createGame', message: 'Fail' }));
+      }
+        
+   
+    }
+    const subscribe = async ({ key }: KeyData, ws: WebSocket) => {
         if(key ==="New Game"){
-            key = Math.floor(Math.random()* 1000).toString()
+           var game = await gameDB.createGame('Waiting',[],500,0,[],undefined,undefined,7,0)
         }
         subscribers(key).add(ws);
         ws.send(JSON.stringify({ topic: 'game key', message: key }))
     }
+
 
     const unsubscribe = ({ key }: KeyData, ws: WebSocket) => subscribers(key).delete(ws);
 
@@ -62,13 +74,37 @@ const clientMap = (): ClientMap => {
                 ws.send(JSON.stringify({ topic, message }));
     };
 
-    const login = (data: LoginData, ws: WebSocket) => {
-        // TODO: check if user is in db
-        if (data.username === 'wael' && data.password === 'wael') {
-            ws.send(JSON.stringify({ topic: 'login', message: 'success' }));
-        } else {
-            ws.send(JSON.stringify({ topic: 'login', message: 'failed' }));
+    const login = async (data: LoginData, ws: WebSocket) => {
+        try{
+            const user =await DB.login(data.username, data.password);
+            if(user){
+                ws.send(JSON.stringify({ topic: 'login', message: 'Success' }));
+                return;
+            }else{
+                ws.send(JSON.stringify({ topic: 'login', message: 'Fail , UserName Or Password is not correct' }));
+                return;
+            }
+        }catch(e){
+            console.error(e);
+            ws.send(JSON.stringify({ topic: 'login', message: 'Fail' }));
+            return;
         }
+    };
+    const signup = async (data: LoginData, ws: WebSocket) => {
+        // Add user to db
+        console.log(data)
+        try{
+            const user = await userDB.createUser(data.username, data.password);
+            if(user){
+                ws.send(JSON.stringify({ topic: 'signup', message: user}));
+                return;
+            }
+        }catch(e){  
+            console.error(e);
+            ws.send(JSON.stringify({ topic: 'signup', message: 'Fail' }));
+            return;
+        }
+   
     };
     const startGame = (makeMove: MakeMove, ws: WebSocket) => {
         subscribers(makeMove.key).forEach(connectedPlayer => {
@@ -100,7 +136,7 @@ const clientMap = (): ClientMap => {
             clients[k].delete(ws);
     };
 
-    return { subscribe, unsubscribe, send, login, makeMove, cachUno, sayUno, close };
+    return { subscribe, unsubscribe, send, login, signup, makeMove, cachUno, sayUno, close ,createGame};
 };
 
 const clients = clientMap();
@@ -112,6 +148,7 @@ type Command = { type: string } & Record<string, unknown>
  * After the server is created, we listen for new connections.
  * To join Looby send  {  "type": "subscribe",  "key": "15", "userName": "user1" }
  */
+
 webSocketServer.on('connection', (ws, req) => {
     ws.on('message', message => {
         try {
@@ -127,5 +164,3 @@ webSocketServer.on('connection', (ws, req) => {
     });
     ws.on('close', () => clients.close({}, ws));
 });
-
-console.log('Pub/Sub server listening on 9090')

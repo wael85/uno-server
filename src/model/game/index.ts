@@ -90,9 +90,12 @@ export  class GameLooby{
   players: player[]
   numberOfPlayers: number =4
   gameid: string | undefined
+  score: number = 500
+  creator: player
 
 
-  constructor(creator: player, numberOfPlayers: number, score: number = 500 ,gameId: string | undefined) {
+  constructor(creator: player, numberOfPlayers: number, score: number| undefined, gameId: string | undefined) {
+    this.creator = creator
     this.players = [creator]
     this.numberOfPlayers = numberOfPlayers
     this.gameid = gameId
