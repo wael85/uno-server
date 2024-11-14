@@ -1,3 +1,4 @@
+
 # Uno server
 
 # Sign up
@@ -52,3 +53,24 @@ All Players in the game receives => {"topic":"joinGame","message":{"players":["W
 3. Handel On_init to retreave all games from database
 4. Handel GetMyGame
 5. Handel Make move and check rolse
+
+# uno-server
+
+# Join group of webSocket , if new key will create new group
+
+{
+    "type": "subscribe",
+    "key": "15"
+}
+
+# Send to all players
+
+{
+    "type": "send",
+    "topic": "15",
+    "message": {
+        //can be the state after each move user makes
+    }
+}
+
+
