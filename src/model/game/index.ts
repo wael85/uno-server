@@ -7,6 +7,7 @@ import { Hand } from '../hand/index'
 import { WebSocket } from 'ws'
 
 export default class ServerGame implements GameInterface {
+  type: string='Uno'
   gameId: string | undefined
   players: string[]
   targetScore: number
@@ -100,21 +101,24 @@ export default class ServerGame implements GameInterface {
   checkEndOfHand() {
     if (this.handAtPlay!.hasEnded()) {
       const handWinner = this.handAtPlay!.winner()
+      //We Play one Hand at a time
+      this.theWinner = handWinner
+      this.status = 'Finished'
       if (handWinner !== undefined) {
         this.playerScores[handWinner] += this.handAtPlay!.score()
       }
-      for (let i = 0; i < this.players.length; i++) {
-        if (this.playerScores[i] >= this.targetScore) {
-          this.theWinner = i
-          this.handAtPlay = undefined
-          return
-        }
-      }
-      if (this.theWinner === undefined) {
-        this.handAtPlay = new Hand(this.players, this.dealer, this.shuffler, this.cardsPerPlayer)
-      } else {
-        this.handAtPlay = undefined
-      }
+      // for (let i = 0; i < this.players.length; i++) {
+      //   if (this.playerScores[i] >= this.targetScore) {
+      //     this.theWinner = i
+      //     this.handAtPlay = undefined
+      //     return
+      //   }
+      // }
+      // if (this.theWinner === undefined) {
+      //   this.handAtPlay = new Hand(this.players, this.dealer, this.shuffler, this.cardsPerPlayer)
+      // } else {
+      //   this.handAtPlay = undefined
+      // }
     }
   }
 }
