@@ -5,8 +5,8 @@ import Game  from './model/game/index'
 import * as userDB from './model/UserDAO'
 import * as gameDB from './model/GameDAO'
 import { GameStore } from './store';
-import e from 'express';
-import { join } from 'path';
+import { Color } from './interfaces/Deck';
+import ServerGame from './model/game/index';
 
 
 const webSocketServer = new WebSocketServer({ port: 9090, path: '/publish' },async ()=>{
@@ -22,19 +22,19 @@ const webSocketServer = new WebSocketServer({ port: 9090, path: '/publish' },asy
 // type gameStat = {gameId: number, game: Game}
 // type Lobby = { lobbyId: number,maxPlayers:number, score:number ,players: string[]}
 type KeyData = {key: string}
+type Command = { type: string } & Record<string, unknown>
 type LoginData = {username: string, password: string}
-type MakeMove = {key: string, message: any}
+type MakeMove = {key: string,action: 'DROW'|'PLAY', cardIndex?: number,color?:Color }
 type Message = {topic: string, message: any}
 type CreateGame = { creator: string,score: number, numberOfPlayers: number }
 type JoinGame = { gameId: string, player: string }
+type SayUno = { gameId: string, player: string }
 interface ClientMap extends Record<string, (data: any, ws: WebSocket) => void> {
     login( data: LoginData, ws: WebSocket): void
     signup(data: LoginData, ws: WebSocket): void
     createGame(data: CreateGame, ws: WebSocket): void
     joinGame(data: JoinGame, ws: WebSocket): void
     startGame(data: KeyData, ws: WebSocket): void
-    subscribe(data: KeyData, ws: WebSocket): void
-    unsubscribe(data: KeyData, ws: WebSocket): void
     send(message: Message, ws: WebSocket): void
     makeMove(data:KeyData, ws: WebSocket): void
     cachUno( data:KeyData, ws: WebSocket): void
@@ -85,23 +85,6 @@ const clientMap = (): ClientMap => {
             ws.send(JSON.stringify({ topic: 'joinGame', message: 'Fail' }));
         }
     }
-    const subscribe = async ({ key }: KeyData, ws: WebSocket) => {
-        if(key ==="New Game"){
-           var game = await gameDB.createGame('Waiting',[],500,0,[],undefined,undefined,7,0)
-        }
-        subscribers(key).add(ws);
-        ws.send(JSON.stringify({ topic: 'game key', message: key }))
-    }
-
-
-    const unsubscribe = ({ key }: KeyData, ws: WebSocket) => subscribers(key).delete(ws);
-
-    const send = ({ topic, message }: { topic: string, message: {} }, _: WebSocket) => {
-        for (let ws of subscribers(topic))
-            if (ws.readyState === WebSocket.OPEN)
-                ws.send(JSON.stringify({ topic, message }));
-    };
-
     const login = async (data: LoginData, ws: WebSocket) => {
         try{
             const user =await DB.login(data.username, data.password);
@@ -138,6 +121,7 @@ const clientMap = (): ClientMap => {
         const game = store.getGame(key.key);
         if(game){
             game.start();
+            store.saveGame(key.key);
             const result = game.getGameJson();
             const sockets = game.playersSocket;
             sockets.forEach(pws => {
@@ -147,35 +131,56 @@ const clientMap = (): ClientMap => {
             ws.send(JSON.stringify({ topic: 'startGame', message: 'Fail' }));
         }
     };
-    const makeMove = (makeMove: MakeMove, ws: WebSocket) => {
-        subscribers(makeMove.key).forEach(connectedPlayer => {
-            if (connectedPlayer.readyState === WebSocket.OPEN) {
-                connectedPlayer.send(JSON.stringify({ topic: 'makeMove', message: makeMove.message }));
-            }
-        });
+   
+    const send = ({ topic, message }: { topic: string, message: {} }, _: WebSocket) => {
+        // for (let ws of subscribers(topic))
+        //     if (ws.readyState === WebSocket.OPEN)
+        //         ws.send(JSON.stringify({ topic, message }));
     };
 
+    const makeMove = (makeMove: MakeMove, ws: WebSocket) => {
+        let result: any;
+        if(makeMove.action === 'DROW'){
+            result = store.getGame(makeMove.key)?.handAtPlay?.draw();
+
+        }else if(makeMove.action === 'PLAY'){
+            result = store.playCard(makeMove.key, makeMove.cardIndex?? -1, makeMove.color);
+            if(result.type === 'Error' || result.type === 'Exception'){
+            ws.send(JSON.stringify(result));
+            return;
+            }else{
+                 if ('status' in result && result.status === 'Finished'){
+                    const sockets = store.getGamePlayersSocket(makeMove.key);
+                    const theWinner = result.theWinner;
+                    sockets?.forEach(pws => pws.send(JSON.stringify({ topic: 'gameOver', message: {theWinner} })));
+                 }else{
+                    const sockets = store.getGamePlayersSocket(makeMove.key);
+                    const resultJson = result.getGameJson();
+                    sockets?.forEach(pws => pws.send(JSON.stringify({ topic: 'gameState', message: {resultJson} })));
+                 }
+            }
+        }
+    }
+
     const cachUno = ({ key }: KeyData, ws: WebSocket) => {
-        subscribers(key).add(ws);
     };
 
     const sayUno = ({ key }: KeyData, ws: WebSocket) => {
-        subscribers(key).add(ws);
     };
 
     const close = (_: unknown, ws: WebSocket) => {
-        if (ws.readyState === WebSocket.OPEN)
+        if (ws.readyState === WebSocket.OPEN){
             ws.close();
-        for (let k in clients)
-            clients[k].delete(ws);
+           //We need to remove the player from the game
+        }
+       
     };
 
-    return { subscribe, unsubscribe, send, login, signup, makeMove, cachUno, sayUno, close ,createGame ,joinGame, startGame};
+    return { send, login, signup, makeMove, cachUno, sayUno, close ,createGame ,joinGame, startGame};
 };
 const store = new GameStore();
 const clients = clientMap();
 
-type Command = { type: string } & Record<string, unknown>
 
 
 /**

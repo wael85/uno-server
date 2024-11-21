@@ -57,7 +57,11 @@ async function createGame(
   const savedGame = await game.save();
   return { gameId:savedGame.id.toString(), game: savedGame };
 }
-
+async function getAllGames(): Promise<IGame[]> {
+  let games =  await Game.find();
+  console.log(games);
+  return games;
+}
 // Get a game by ID
 async function getGameById(gameId: string): Promise<IGame | null> {
   return await Game.findById(gameId);
@@ -87,4 +91,4 @@ async function getUserGames(username: string): Promise<IGame[]> {
   return await Game.find({ players: username, status: { $ne: 'Finished' } });
 }
 
-export { Game, IGame, createGame, getGameById, updateGame, deleteGame, addPlayer, getUserGames };
+export { Game, IGame, createGame, getGameById, updateGame, deleteGame, addPlayer, getUserGames ,getAllGames};

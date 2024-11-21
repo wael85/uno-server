@@ -1,11 +1,33 @@
+import { Color } from './interfaces/Deck';
 import ServerGame from './model/game/index'
 import * as gameDB from './model/GameDAO';
 import { WebSocket } from 'ws';
 
-
+export type Error = {type: "Error"| "Exception", message: any};
 export class GameStore {
     runningGames = new Map<string, ServerGame>(); 
-
+    constructor(){
+        this.init();
+    }
+    init = async () => {
+        try{
+            const games = await gameDB.getAllGames();
+            for(let game of games){
+                const serverGame = new ServerGame(game.players[0], new WebSocket(''), game.targetScore, game.playerCount);
+                serverGame.gameId = game.id;
+                serverGame.players = game.players;
+                serverGame.playerScores = game.playerScores;
+                serverGame.handAtPlay = game.handAtPlay;
+                serverGame.theWinner = game.theWinner;
+                serverGame.cardsPerPlayer = game.cardsPerPlayer;
+                serverGame.dealer = game.dealer;
+                serverGame.status = game.status;
+                this.runningGames.set(game.id, serverGame);
+            }
+        }catch(e){
+            console.error(e);
+    }
+}
     createGame = async (creator: string, creatorSocket:WebSocket, score: number, numberOfPlayers: number): Promise<{game:ServerGame | undefined,gameId:string}> =>{
         try{
             const newGame = await gameDB.createGame('Waiting',[],score,numberOfPlayers,[],undefined,undefined,7,0);
@@ -21,20 +43,44 @@ export class GameStore {
         }
     }
     getGame = (gameId: string): ServerGame | undefined =>{
+        console.log(this.runningGames);
         return this.runningGames.get(gameId);
     }
     deleteGame = (gameId: string): boolean =>{
         return this.runningGames.delete(gameId);
     }
-    getGameIds = (): string[] =>{
-        return Array.from(this.runningGames.keys());
+    getGamePlayersSocket = (gameId: string): WebSocket[] | undefined =>{
+        const game = this.getGame(gameId);
+        if(game){
+            return game.playersSocket;
+        }
+        return undefined;
     }
-    getGames = (): ServerGame[] =>{
-        return Array.from(this.runningGames.values());
+    getGamePlayers = (gameId: string): string[] | undefined =>{
+        const game = this.getGame(gameId);
+        if(game){
+            return game.players;
+        }
+        return undefined;
     }
-    getGameCount = (): number =>{
-        return this.runningGames.size;
+    playCard = (gameId: string, cardIndex: number,color?:Color): ServerGame | Error =>{
+        try{
+            const game = this.getGame(gameId);
+            
+            if(game && game.status === 'Playing'){
+                if(cardIndex < 0 ) throw new Error('Invalid card index: -1');
+                game.handAtPlay?.play(cardIndex,color)
+                return game;
+            }
+            return {type:'Error',message:'Game not found or not playing'}
+        }catch(e){
+            console.error(e);
+            return {type:'Exception',message: {e}};
+        }
+
     }
+    
+
     getGameByPlayer = (player: string): ServerGame | undefined =>{
         for(let game of this.runningGames.values()){
             if(game.players.includes(player)){
@@ -52,7 +98,12 @@ export class GameStore {
         return undefined;
     }
     getGamesByStatus = (status: string): ServerGame[] =>{
-        return this.getGames().filter(game => game.status === status);
+        const games: ServerGame[] = [];
+        for(let game of this.runningGames.values()){
+            if(game.status === status){
+                games.push(game);}
+            }
+        return games;
     }
     joinGame = (gameId: string, player: string, playerSocket: WebSocket): boolean =>{
         try{
