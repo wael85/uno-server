@@ -8,7 +8,6 @@ import { GameStore } from './store';
 import { Color } from './interfaces/Deck';
 import ServerGame from './model/game/index';
 
-
 const webSocketServer = new WebSocketServer({ port: 9090, path: '/publish' },async ()=>{
     console.log('Pub/Sub server listening on 9090')
     try{
@@ -29,16 +28,16 @@ type Message = {topic: string, message: any}
 type CreateGame = { creator: string,score: number, numberOfPlayers: number }
 type JoinGame = { gameId: string, player: string }
 type SayUno = { gameId: string, player: string }
+type CachUno = { gameId: string, accused: string; accuser: string }
 interface ClientMap extends Record<string, (data: any, ws: WebSocket) => void> {
     login( data: LoginData, ws: WebSocket): void
     signup(data: LoginData, ws: WebSocket): void
     createGame(data: CreateGame, ws: WebSocket): void
     joinGame(data: JoinGame, ws: WebSocket): void
     startGame(data: KeyData, ws: WebSocket): void
-    send(message: Message, ws: WebSocket): void
-    makeMove(data:KeyData, ws: WebSocket): void
-    cachUno( data:KeyData, ws: WebSocket): void
-    sayUno(data:KeyData, ws: WebSocket): void
+    makeMove(data:MakeMove, ws: WebSocket): void
+    cachUno( data:CachUno, ws: WebSocket): void
+    sayUno(data:SayUno, ws: WebSocket): void
     close(message: any, ws: WebSocket): void
 }
 
@@ -131,13 +130,6 @@ const clientMap = (): ClientMap => {
             ws.send(JSON.stringify({ topic: 'startGame', message: 'Fail' }));
         }
     };
-   
-    const send = ({ topic, message }: { topic: string, message: {} }, _: WebSocket) => {
-        // for (let ws of subscribers(topic))
-        //     if (ws.readyState === WebSocket.OPEN)
-        //         ws.send(JSON.stringify({ topic, message }));
-    };
-
     const makeMove = (makeMove: MakeMove, ws: WebSocket) => {
         let result: any;
         if(makeMove.action === 'DROW'){
@@ -162,10 +154,35 @@ const clientMap = (): ClientMap => {
         }
     }
 
-    const cachUno = ({ key }: KeyData, ws: WebSocket) => {
+    const cachUno = (data: CachUno, ws: WebSocket) => {
+        const rGame = store.getGame(data.gameId);
+        if(rGame){
+            const result = rGame.handAtPlay?.catchUnoFailure({accused: rGame.players.indexOf(data.accused), accuser: rGame.players.indexOf(data.accuser)});
+            const sockets = store.getGamePlayersSocket(data.gameId);
+            if(result){
+                sockets?.forEach(pws => pws.send(JSON.stringify({ topic: 'cachUno', message: {game:rGame,cachUnoStatus: result} })));
+                return;
+            }else{
+                ws.send(JSON.stringify({ topic: 'cachUno', message: 'Fail' }));
+                return;
+            }
+        }else{
+            ws.send(JSON.stringify({ topic: 'cachUno', message: 'Game not found' }));
+            return;
+        }
     };
 
-    const sayUno = ({ key }: KeyData, ws: WebSocket) => {
+    const sayUno = (data:SayUno, ws: WebSocket) => {
+        const rGame = store.getGame(data.gameId);
+        if(rGame){
+            rGame.handAtPlay?.sayUno(rGame.players.indexOf(data.player));
+            const sockets = store.getGamePlayersSocket(data.gameId);
+            sockets?.forEach(pws => pws.send(JSON.stringify({ topic: 'sayUno', message: rGame })));
+            return;
+        }else{
+            ws.send(JSON.stringify({ topic: 'sayUno', message: 'Fail' }));
+            return;
+        }
     };
 
     const close = (_: unknown, ws: WebSocket) => {
@@ -176,7 +193,7 @@ const clientMap = (): ClientMap => {
        
     };
 
-    return { send, login, signup, makeMove, cachUno, sayUno, close ,createGame ,joinGame, startGame};
+    return { login, signup, makeMove, cachUno, sayUno, close ,createGame ,joinGame, startGame};
 };
 const store = new GameStore();
 const clients = clientMap();
