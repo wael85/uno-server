@@ -141,10 +141,12 @@ const clientMap = (): ClientMap => {
     const makeMove = (makeMove: MakeMove, ws: WebSocket) => {
         let result: any;
         if(makeMove.action === 'DROW'){
-            result = store.getGame(makeMove.key)?.handAtPlay?.draw();
+            result = store.draw(makeMove.key);
 
         }else if(makeMove.action === 'PLAY'){
             result = store.playCard(makeMove.key, makeMove.cardIndex?? -1, makeMove.color);
+        }
+
             if(result.type === 'Error' || result.type === 'Exception'){
             ws.send(JSON.stringify(result));
             return;
@@ -159,7 +161,7 @@ const clientMap = (): ClientMap => {
                     sockets?.forEach(pws => pws.send(JSON.stringify({ topic: 'gameState', message: {resultJson} })));
                  }
             }
-        }
+        
     }
 
     const cachUno = ({ key }: KeyData, ws: WebSocket) => {

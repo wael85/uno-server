@@ -79,6 +79,23 @@ export class GameStore {
         }
 
     }
+
+    draw = (gameId: string,): ServerGame | Error =>{
+        try{
+            const game = this.getGame(gameId);
+            
+            if(game && game.status === 'Playing'){
+                
+                game.handAtPlay?.draw()
+                return game;
+            }
+            return {type:'Error',message:'Game not found or not playing'}
+        }catch(e){
+            console.error(e);
+            return {type:'Exception',message: {e}};
+        }
+
+    }
     
 
     getGameByPlayer = (player: string): ServerGame | undefined =>{
