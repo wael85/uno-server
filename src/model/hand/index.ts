@@ -312,14 +312,8 @@ export class Hand implements HandInterface {
       if (this.playerHands[i].length === 0) {
         this.ended = true
         this.theWinner = i
-        const event = new CustomEvent(`Winner: ${i}, Score: ${this.score()}`)
-        for (let i = 0; i < this.callbacks.length; i++) {
-          const myfunction = this.callbacks[i]
-          myfunction(event)
-        }
-        this.callbacks = []
         return true
-      }
+        }
     }
     return false
   }

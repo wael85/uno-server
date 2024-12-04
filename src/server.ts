@@ -151,10 +151,12 @@ const clientMap = (): ClientMap => {
             ws.send(JSON.stringify(result));
             return;
             }else{
+                store.getGame(makeMove.key)?.checkEndOfHand();
                  if ('status' in result && result.status === 'Finished'){
                     const sockets = store.getGamePlayersSocket(makeMove.key);
                     const theWinner = result.theWinner;
-                    sockets?.forEach(pws => pws.send(JSON.stringify({ topic: 'gameOver', message: {theWinner} })));
+                    const resultJson = result.getGameJson();
+                    sockets?.forEach(pws => pws.send(JSON.stringify({ topic: 'gameOver', message: { theWinner, resultJson} })));
                  }else{
                     const sockets = store.getGamePlayersSocket(makeMove.key);
                     const resultJson = result.getGameJson();
