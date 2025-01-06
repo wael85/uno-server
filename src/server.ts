@@ -8,6 +8,28 @@ import { Color } from './interfaces/Deck';
 import ServerGame from './model/game/index';
 
 
+//quick express demostration:
+
+const express = require('express')
+const app = express()
+const port = 8000;
+app.use((__: any,res: any, next: any)=>{
+    res.header("Access-Control-Allow-Origin", "http://localhost:5173");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
+    next();
+})
+  app.get('/', (req: any, res: any) => {
+    res.send(`Hi! Server is listening on port ${port}`)
+  }); 
+  app.listen(port);
+  
+  app.get('/test', (req: any, res: any) => {
+    res.send("Express GET test endpoint works");
+  });
+
+//finished express demonstration
+ 
 const webSocketServer = new WebSocketServer({ port: 9090, path: '/publish' },async ()=>{
     console.log('Pub/Sub server listening on 9090')
     try{
